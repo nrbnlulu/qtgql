@@ -21,6 +21,7 @@ from qtgql.codegen.py.runtime.custom_scalars import (
     TimeScalar,
 )
 from qtgql.codegen.py.runtime.environment import QtGqlEnvironment, set_gql_env
+from qtgql.codegen.py.runtime.queryhandler import BaseQueryHandler
 from qtgql.gqltransport.client import GqlWsTransportClient
 from strawberry import Schema
 
@@ -30,7 +31,6 @@ from tests.test_codegen import schemas
 if TYPE_CHECKING:
     from PySide6 import QtCore
     from qtgql.codegen.py.runtime.bases import _BaseQGraphQLObject
-    from qtgql.codegen.py.runtime.queryhandler import BaseQueryHandler
 
 
 @define(slots=False, kw_only=True)
@@ -45,22 +45,24 @@ class QGQLObjectTestCase:
     )
     query_operationName: str = "MainQuery"
     first_field: str = "user"
-    qml_file: str = dedent(
-        """
-            import QtQuick
-            import generated.TestEnv as Env
-
-             Env.UseQuery{
-                objectName: "rootObject"
-                anchors.fill: parent;
-                operationName: "MainQuery"
-
-            }
-        """
-    )
+    qml_file: str = ""
 
     def __attrs_post_init__(self):
         self.query = dedent(self.query)
+        if not self.qml_file:
+            self.qml_file = dedent(
+                """
+                    import QtQuick
+                    import generated.TestEnv as Env
+
+                     Env.Require%s{
+                        objectName: "rootObject"
+                        anchors.fill: parent;
+
+                    }
+                """
+                % self.query_operationName
+            )
 
     @cached_property
     def evaluator(self) -> SchemaEvaluator:
@@ -98,7 +100,6 @@ class QGQLObjectTestCase:
 
         sys.modules["objecttypes"] = types_module
         exec(compile(generated["handlers"], "gen_handlers", "exec"), handlers_mod.__dict__)
-        handlers_mod.init()
         return CompiledTestCase(
             evaluator=self.evaluator,
             objecttypes_mod=types_module,
@@ -131,9 +132,9 @@ class CompiledTestCase(QGQLObjectTestCase):
         assert self.tested_type
         return getattr(self.objecttypes_mod, self.tested_type.name)
 
-    @property
+    @cached_property
     def query_handler(self) -> "BaseQueryHandler":
-        return getattr(self.handlers_mod, self.query_operationName)()
+        return getattr(self.handlers_mod, self.query_operationName)(None)
 
     def get_signals(self) -> dict[str, "QtCore.Signal"]:
         return {
@@ -165,6 +166,9 @@ class CompiledTestCase(QGQLObjectTestCase):
     def load_qml(self, qmlbot: QmlBot):
         qmlbot.loads(self.qml_file)
         return self
+
+    def get_qml_query_handler(self, bot: QmlBot) -> BaseQueryHandler:
+        return bot.qquickiew.findChildren(BaseQueryHandler)[0]
 
 
 ScalarsTestCase = QGQLObjectTestCase(

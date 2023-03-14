@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:  # pragma: no cover
-    from qtgql.codegen.py.runtime.queryhandler import BaseQueryHandler
     from qtgql.gqltransport.client import HandlerProto
 
 
@@ -29,16 +28,7 @@ class QtGqlEnvironment:
         the generated handlers based on the configurations.
         """
         self.client = client
-        self._query_handlers: dict[str, BaseQueryHandler] = {}
         self.name = name
-
-    def add_query_handler(self, handler: BaseQueryHandler) -> None:
-        """Adds an query handler to the environment, this would further be used
-        by `UseQuery` Components."""
-        self._query_handlers[handler.objectName()] = handler
-
-    def get_handler(self, operation_name: str) -> BaseQueryHandler:
-        return self._query_handlers[operation_name]
 
 
 _ENV_MAP: dict[str, QtGqlEnvironment] = {}

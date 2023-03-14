@@ -11,6 +11,7 @@ from tests.test_codegen.test_py.testcases import ObjectWithListOfObjectTestCase
 def sample_model_initialized() -> QGraphQListModel:
     testcase = ObjectWithListOfObjectTestCase.compile()
     handler = testcase.query_handler
+    handler.fetch()
     handler.on_data(testcase.initialize_dict)
     return handler._data.persons
 

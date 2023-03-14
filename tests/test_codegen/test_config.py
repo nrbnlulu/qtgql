@@ -57,3 +57,18 @@ def test_invalid_operation_raises(pseudo_config):
     pseudo_config.operations_dir.write_text("query OpName{NoSuchField}")
     with pytest.raises(QtGqlException):
         pseudo_config.generate()
+
+
+def test_get_mutation_operations(pseudo_config):
+    pseudo_config.schema_path.write_text(str(ScalarsTestCase.schema))
+    pseudo_config.operations_dir.write_text(
+        """mutation CreateUserNoArgs{createUserNoArgs{
+    name
+    age
+    agePoint
+    uuid
+    male
+    }}"""
+    )
+    pseudo_config.generate()
+    assert pseudo_config._evaluator._mutation_handlers != {}

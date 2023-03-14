@@ -24,4 +24,11 @@ class Query:
         return User()
 
 
-schema = strawberry.Schema(query=Query)
+@strawberry.type
+class Mutation:
+    @strawberry.mutation
+    def createUserNoArgs(self) -> User:
+        return User()
+
+
+schema = strawberry.Schema(query=Query, mutation=Mutation)

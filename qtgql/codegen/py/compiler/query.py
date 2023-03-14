@@ -99,7 +99,7 @@ class QtGqlQueriedField(GqlFieldDefinition):
         )
 
 
-class QtGqlQueryHandlerDefinition(NamedTuple):
+class QtGqlOperationDefinition(NamedTuple):
     query: str
     name: str
     field: QtGqlQueriedField

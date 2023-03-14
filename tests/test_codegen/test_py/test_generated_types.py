@@ -549,55 +549,55 @@ class TestDefaultConstructor:
 class TestGarbageCollection:
     def test_root_object_with_scalars_cleanup_when_no_subscribers(self, qtbot, schemas_server):
         testcase = ScalarsTestCase.compile(url=schemas_server.address)
-        testcase.query_handler.consume()
+        testcase.query_handler.fetch()
         qtbot.wait_until(lambda: testcase.query_handler.completed)
         node = testcase.query_handler.data
         node_id = node.id
         assert node is testcase.gql_type.__store__.get_node(node_id)
-        testcase.query_handler.unconsume()
+        testcase.query_handler.deleteLater()
         assert not testcase.gql_type.__store__.get_node(node_id)
         assert not testcase.query_handler.data
 
     def test_refetch(self, qtbot, schemas_server):
         testcase = ScalarsTestCase.compile(url=schemas_server.address)
-        testcase.query_handler.consume()
+        testcase.query_handler.fetch()
         qtbot.wait_until(lambda: testcase.query_handler.completed)
         node = testcase.query_handler.data
         node_id = node.id
         assert node is testcase.gql_type.__store__.get_node(node_id)
-        testcase.query_handler.unconsume()
+        testcase.query_handler.dispose()
         assert not testcase.gql_type.__store__.get_node(node_id)
         assert not testcase.query_handler.data
-        testcase.query_handler.consume()
+        testcase.query_handler.refetch()
         qtbot.wait_until(lambda: bool(testcase.query_handler._data))
 
     def test_nested_object(self, qtbot, schemas_server):
         testcase = NestedObjectTestCase.compile(url=schemas_server.address)
-        testcase.query_handler.consume()
+        testcase.query_handler.fetch()
         qtbot.wait_until(lambda: testcase.query_handler.completed)
         node = testcase.query_handler.data.person
         node_id = node.id
         assert node is node.__store__.get_node(node_id)
-        testcase.query_handler.unconsume()
+        testcase.query_handler.deleteLater()
         assert not testcase.gql_type.__store__.get_node(node_id)
         assert not testcase.query_handler.data
 
     def test_object_with_list_of_object(self, qtbot, schemas_server):
         testcase = ObjectWithListOfObjectTestCase.compile(url=schemas_server.address)
-        testcase.query_handler.consume()
+        testcase.query_handler.fetch()
         qtbot.wait_until(lambda: testcase.query_handler.completed)
         persons = testcase.query_handler.data.persons._data
-        testcase.query_handler.unconsume()
+        testcase.query_handler.deleteLater()
         for person in persons:
             assert not person.__store__.get_node(person.id)
         assert not testcase.query_handler.data
 
     def test_root_field_list_of_object(self, qtbot, schemas_server):
         testcase = RootListOfTestCase.compile(url=schemas_server.address)
-        testcase.query_handler.consume()
+        testcase.query_handler.fetch()
         qtbot.wait_until(lambda: testcase.query_handler.completed)
         users = testcase.query_handler.data._data
-        testcase.query_handler.unconsume()
+        testcase.query_handler.deleteLater()
         for user in users:
             assert not user.__store__.get_node(user.id)
         assert not testcase.query_handler.data

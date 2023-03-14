@@ -25,7 +25,7 @@ from qtgql.codegen.graphql_ref import (
     is_union_definition,
 )
 from qtgql.codegen.py.compiler.builtin_scalars import BuiltinScalars
-from qtgql.codegen.py.compiler.query import QtGqlQueriedField, QtGqlQueryHandlerDefinition
+from qtgql.codegen.py.compiler.query import QtGqlOperationDefinition, QtGqlQueriedField
 from qtgql.codegen.py.compiler.template import (
     TemplateContext,
     handlers_template,
@@ -64,25 +64,45 @@ class QtGqlVisitor(visitor.Visitor):
 
     def __init__(self, evaluator: SchemaEvaluator):
         super().__init__()
-        self.query_handlers: dict[str, QtGqlQueryHandlerDefinition] = {}
+        self.query_handlers: dict[str, QtGqlOperationDefinition] = {}
+        self.mutation_handlers: dict[str, QtGqlOperationDefinition] = {}
         self.evaluator = evaluator
+
+    def _get_root_type_field(
+        self, root_type: GqlTypeDefinition, gql_field: gql_lang.FieldNode
+    ) -> QtGqlQueriedField:
+        return QtGqlQueriedField.from_field(
+            root_type.fields_dict[gql_field.name.value], gql_field.selection_set
+        )
 
     def enter_operation_definition(self, node, key, parent, path, ancestors):
         if operation := is_operation_def_node(node):
-            if operation.operation is OperationType.QUERY:
+            if operation.operation in (OperationType.QUERY, OperationType.MUTATION):
                 root_field: gql_lang.FieldNode = operation.selection_set.selections[0]  # type: ignore
-                fname = root_field.name.value
-                assert self.evaluator._query_type
-                root_qtgql_field = QtGqlQueriedField.from_field(
-                    self.evaluator._query_type.fields_dict[fname], root_field.selection_set
-                )
                 op_name = operation.name.value
-                self.query_handlers[op_name] = QtGqlQueryHandlerDefinition(
-                    query=graphql.print_ast(node),
-                    name=op_name,
-                    field=root_qtgql_field,
-                    directives=node.directives,
-                )
+                if operation.operation is OperationType.QUERY:
+                    assert self.evaluator._query_type
+                    root_qtgql_field = self._get_root_type_field(
+                        self.evaluator._query_type, root_field
+                    )
+                    operation_definition = QtGqlOperationDefinition(
+                        query=graphql.print_ast(node),
+                        name=op_name,
+                        field=root_qtgql_field,
+                        directives=node.directives,
+                    )
+                    self.query_handlers[op_name] = operation_definition
+                elif operation.operation is OperationType.MUTATION:
+                    root_qtgql_field = self._get_root_type_field(
+                        self.evaluator._mutation_type, root_field
+                    )
+                    operation_definition = QtGqlOperationDefinition(
+                        query=graphql.print_ast(node),
+                        name=op_name,
+                        field=root_qtgql_field,
+                        directives=node.directives,
+                    )
+                    self.mutation_handlers[op_name] = operation_definition
 
 
 class SchemaEvaluator:
@@ -91,8 +111,10 @@ class SchemaEvaluator:
         self._generated_types: dict[str, GqlTypeDefinition] = {}
         self._generated_enums: EnumMap = {}
         self._fragments_store: dict[int, str] = {}
-        self._query_handlers: dict[str, QtGqlQueryHandlerDefinition] = {}
+        self._query_handlers: dict[str, QtGqlOperationDefinition] = {}
+        self._mutation_handlers: dict[str, QtGqlOperationDefinition] = {}
         self._query_type: Optional[GqlTypeDefinition] = None
+        self._mutation_type: Optional[GqlTypeDefinition] = None
 
     @cached_property
     def schema_definition(self) -> graphql.GraphQLSchema:
@@ -217,6 +239,9 @@ class SchemaEvaluator:
                 if object_type := self._evaluate_object_type(object_definition):
                     if object_definition is self.schema_definition.query_type:
                         self._query_type = object_type
+                    elif object_definition is self.schema_definition.mutation_type:
+                        self._mutation_type = object_type
+
                     assert object_type not in self.root_types
 
                     self._generated_types[object_type.name] = object_type
@@ -234,11 +259,12 @@ class SchemaEvaluator:
 
         # get QtGql fields from the query AST and inject ID field.
         operation_miner = QtGqlVisitor(self)
-        operations = visitor.visit(operations, operation_miner)
+        visitor.visit(operations, operation_miner)
         self._query_handlers.update(operation_miner.query_handlers)
+        self._mutation_handlers.update(operation_miner.mutation_handlers)
 
     def dumps(self) -> GeneratedNamespace:
-        """:return: The generated schema module as a string."""
+        """:return: The generated modules as a string."""
         self.parse_schema_concretes()
         self.parse_operations()
         context = TemplateContext(
@@ -247,6 +273,7 @@ class SchemaEvaluator:
                 t for name, t in self._generated_types.items() if name not in BuiltinScalars.keys()
             ],
             queries=list(self._query_handlers.values()),
+            mutations=list(self._mutation_handlers.values()),
             config=self.config,
         )
         return GeneratedNamespace(

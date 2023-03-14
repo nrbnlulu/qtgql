@@ -1,3 +1,4 @@
+from functools import cached_property
 from pathlib import Path
 from typing import Callable, Type
 
@@ -9,7 +10,7 @@ from qtgql.codegen.py.runtime.bases import BaseGraphQLObject, _BaseQGraphQLObjec
 from qtgql.codegen.py.runtime.custom_scalars import CUSTOM_SCALARS, CustomScalarMap
 
 
-@define
+@define(slots=False)
 class QtGqlConfig:
     """Encapsulates configurations for a qtgql-codegen application per GraphQL
     schema."""
@@ -51,8 +52,12 @@ class QtGqlConfig:
     def generated_handlers_dir(self) -> Path:
         return self.graphql_dir / "handlers.py"
 
+    @cached_property
+    def _evaluator(self) -> SchemaEvaluator:
+        return self.evaluator(self)
+
     def generate(self) -> None:
-        self.evaluator(self).dump()
+        self._evaluator.dump()
 
     def __attrs_post_init__(self):
         if self.custom_scalars != CUSTOM_SCALARS:
